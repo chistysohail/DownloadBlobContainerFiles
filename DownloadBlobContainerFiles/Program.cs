@@ -15,21 +15,58 @@ class Program
         BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
         BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);
 
+        bool? yesToAll = null;
+
         await foreach (BlobItem blobItem in containerClient.GetBlobsAsync())
         {
             BlobClient blobClient = containerClient.GetBlobClient(blobItem.Name);
+            BlobProperties properties = await blobClient.GetPropertiesAsync();
 
-            Console.WriteLine($"Downloading {blobItem.Name}...");
+            Console.WriteLine($"File: {blobItem.Name}, Size: {properties.ContentLength} bytes");
 
-            BlobDownloadInfo download = await blobClient.DownloadAsync();
-
-            using (FileStream fs = File.OpenWrite(Path.Combine(destinationPath, blobItem.Name)))
+            if (yesToAll == null)
             {
-                await download.Content.CopyToAsync(fs);
-                fs.Close();
+                Console.WriteLine("Download this file? (y/n/yall/nall)");
+                var choice = Console.ReadLine().ToLower();
+
+                switch (choice)
+                {
+                    case "y":
+                        await DownloadBlob(blobClient);
+                        break;
+                    case "n":
+                        break;
+                    case "yall":
+                        yesToAll = true;
+                        await DownloadBlob(blobClient);
+                        break;
+                    case "nall":
+                        yesToAll = false;
+                        break;
+                    default:
+                        Console.WriteLine("Invalid choice. Skipping...");
+                        break;
+                }
+            }
+            else if (yesToAll == true)
+            {
+                await DownloadBlob(blobClient);
             }
         }
 
-        Console.WriteLine("Download complete!");
+        Console.WriteLine("Operation complete!");
+    }
+
+    private static async Task DownloadBlob(BlobClient blobClient)
+    {
+        Console.WriteLine($"Downloading {blobClient.Name}...");
+
+        BlobDownloadInfo download = await blobClient.DownloadAsync();
+
+        using (FileStream fs = File.OpenWrite(Path.Combine(destinationPath, blobClient.Name)))
+        {
+            await download.Content.CopyToAsync(fs);
+            fs.Close();
+        }
     }
 }
